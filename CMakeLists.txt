@@ -3,10 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 # Section forces static linking.  Commented because this breaks 
 #   testing, because Boost makes static linking against Boot Test 
 #   libraries difficult, and MCS has better things to do than fight it.
-#set(CMAKE_USER_MAKE_RULES_OVERRIDE
-	#${CMAKE_SOURCE_DIR}/cmake/Modules/c_flag_overrides.cmake)
-#set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX
-#	${CMAKE_SOURCE_DIR}/cmake/Modules/cxx_flag_overrides.cmake)
+#set(CMAKE_USER_MAKE_RULES_OVERRIDE ${CMAKE_SOURCE_DIR}/cmake/Modules/c_flag_overrides.cmake)
+#set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX ${CMAKE_SOURCE_DIR}/cmake/Modules/cxx_flag_overrides.cmake)
 
 project(qstem)
 set (stem3_VERSION_MAJOR 2)
@@ -16,7 +14,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-					
+#SET(CMAKE_EXE_LINKER_FLAGS "-static -s")					
 find_package(fftw3 REQUIRED)
 
 find_package(Boost 1.35.0 REQUIRED)

@@ -1424,7 +1424,7 @@ double fe3D(int Z, double q2,int tdsFlag,double scale,int scatFlag)
 }  /* end fe3D() */
 
 
-double sfLUT(double s,int atKind, MULS *muls)
+double sfLUT(double s,int atKind)//MULS *muls
 {
    int i;
    double sf;
@@ -1440,10 +1440,10 @@ double sfLUT(double s,int atKind, MULS *muls)
    if(splinx == NULL) {
      // splinx = s;
      // spliny = sfC;
-     sfSize = muls->sfNk;
-     splinx = muls->sfkArray;
-     spliny = muls->sfTable;
-     atKinds = muls->atomKinds;
+     sfSize = muls.sfNk;
+     splinx = muls.sfkArray;
+     spliny = muls.sfTable;
+     atKinds = muls.atomKinds;
      splinb = double2D(atKinds,sfSize, "splinb" );
      splinc = double2D(atKinds,sfSize, "splinc" );
      splind = double2D(atKinds,sfSize, "splind" );

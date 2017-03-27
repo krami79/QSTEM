@@ -85,7 +85,7 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
 	    int *nslice, int fperr );
 /* long powerof2( long n ); */
 double fe3D(int Z, double q2,int tdsFlag, double scale,int scatFlag);
-double sfLUT(double s,int atKind, MULS *muls);
+double sfLUT(double s,int atKind);//,MULS *muls
 double bicubic(double **ff,int Nz, int Nx,double z,double x);
 int atomCompare(const void *atom1,const void *atom2);
 

@@ -50,10 +50,11 @@ const double pi     = 3.14159265358979;
 const double twopi  = 6.28318530717959;
 const double fourpi = 12.56637061435917;
 
-void plotVzr(fftw_complex **pot,int Nx,int Nz,double dx,MULS *muls);
+void plotVzr(fftw_complex **pot,int Nx,int Nz,double dx); //,MULS *muls
 
 
-void make3DSlicesFT(MULS *muls) {
+void make3DSlicesFT() //MULS *muls 
+{
 
   /************************************************************************
    * temporary variables needed always:
@@ -105,17 +106,17 @@ void make3DSlicesFT(MULS *muls) {
    * Initialization of parameter used in this function
    *********************************************************/
   if (potLUT == NULL) {
-    Nxp = muls->potNx;
-    Nyp = muls->potNy;
-    Nzp = muls->slices;
+    Nxp = muls.potNx;
+    Nyp = muls.potNy;
+    Nzp = muls.slices;
     // potential = float3D(Nzp,Nyp,Nxp,"potential");
     // memset(potential[0][0],0,Nzp*Nyp*Nxp*sizeof(float));
 
     // read the atomic structure and the size of the box:
-    atoms = muls->atoms;
-    // axp = muls->ax; byp = muls->by; 
-    czp = muls->c/muls->cellDiv;
-    axp = muls->potSizeX; byp = muls->potSizeY;
+    atoms = muls.atoms;
+    // axp = muls.ax; byp = muls.by; 
+    czp = muls.c/muls.cellDiv;
+    axp = muls.potSizeX; byp = muls.potSizeY;
     // Now we need to adjust ax, Nx, cz, and Nz to work with the model parameters
     dXp = axp/(double)Nxp;
     dYp = byp/(double)Nyp;
@@ -145,9 +146,9 @@ void make3DSlicesFT(MULS *muls) {
     
     // create an array, so that index=iz*Nx*Ny+iy*Nx+ix = [iz][iy][ix]
     pot = complex2D(Nz,Nx,"pot");
-    potLUT = (double ***)malloc(muls->atomKinds*sizeof(double **));
-    rcutoff = double1D(muls->atomKinds,"rcutoff");
-    memset(rcutoff,0,muls->atomKinds*sizeof(double));
+    potLUT = (double ***)malloc(muls.atomKinds*sizeof(double **));
+    rcutoff = double1D(muls.atomKinds,"rcutoff");
+    memset(rcutoff,0,muls.atomKinds*sizeof(double));
     Nxm = Nx/2;   // Nym = Ny/2;
     dsX = 1.0/ax; // dsY = 1.0/by; 
     dsZ = 1.0/cz;
@@ -168,7 +169,7 @@ void make3DSlicesFT(MULS *muls) {
      * We will now calculate the real space potential for every
      * kind of atom used in this model
      ************************************************************/
-    for (atKind = 0; atKind<muls->atomKinds;atKind++) { 
+    for (atKind = 0; atKind<muls.atomKinds;atKind++) { 
       memset(pot[0],0,sizeof(fftw_complex)*Nz*Nx);
 
       for (iz=0;iz<Nz;iz++) {
@@ -181,8 +182,8 @@ void make3DSlicesFT(MULS *muls) {
 	      arg = twopi*(sx*(0.5*ax)+sz*(0.5*cz)); // place single atom in center of box
 	      ffr = cos(arg); ffi = sin(arg);	  
 	      // all the s are actually q, therefore S = 0.5*q = 0.5*s:
-	      pot[iz][ix][0] = sfLUT(0.5*s,atKind,muls)*ffr;
-	      pot[iz][ix][1] = sfLUT(0.5*s,atKind,muls)*ffi;
+	      pot[iz][ix][0] = sfLUT(0.5*s,atKind)*ffr;//,&muls
+	      pot[iz][ix][1] = sfLUT(0.5*s,atKind)*ffi;//,&muls
 	    }      
 	  }
 	}
@@ -220,7 +221,7 @@ void make3DSlicesFT(MULS *muls) {
 	}
       }
 
-      // plotVzr(pot,Nx,Nz,dX,muls);
+      // plotVzr(pot,Nx,Nz,dX); //,muls
 
       /* Now we need to integrate over z, if we only have a single slice
        */
@@ -244,45 +245,45 @@ void make3DSlicesFT(MULS *muls) {
   /*******************************************************
    * initializing  cz, and trans
    *************************************************************/
-  if(muls->trans==NULL) {
+  if(muls.trans==NULL) {
     printf("make3DSlicesFT: Error, trans not allocated!\n");
     exit(0);
   }
-  memset(muls->trans[0][0],0,Nzp*Nxp*Nyp*sizeof(fftw_complex));
-  if (muls->cz == NULL) muls->cz = float1D(Nzp,"cz");
-  for (i=0;i<Nzp;i++) muls->cz[i] = muls->sliceThickness;  					
+  memset(muls.trans[0][0],0,Nzp*Nxp*Nyp*sizeof(fftw_complex));
+  if (muls.cz == NULL) muls.cz = float1D(Nzp,"cz");
+  for (i=0;i<Nzp;i++) muls.cz[i] = muls.sliceThickness;  					
   
   /********************************************************************
    * Now that we have the lookup table and are able to find interpolations in it, 
    * we can start add the potentials of all the atoms in the structure
    */
-  atoms = muls->atoms;
+  atoms = muls.atoms;
   if (divCount == 0) {
-    qsort(atoms,muls->natom,sizeof(atom),atomCompare);
-    if ((*muls).cfgFile != NULL) {
-      sprintf(buf,"%s/%s",muls->folder,muls->cfgFile);
-      writeCFG(atoms,muls->natom,buf,muls);	
+    qsort(atoms,muls.natom,sizeof(atom),atomCompare);
+    if (muls.cfgFile != NULL) {
+      sprintf(buf,"%s/%s",muls.folder,muls.cfgFile);
+      writeCFG(atoms,muls.natom,buf,&muls);	
     }
   }
-  zStart = (*muls).czOffset+(double)divCount*czp/((double)(*muls).cellDiv);
-  divCount = (divCount + 1) % (*muls).cellDiv;
+  zStart = muls.czOffset+(double)divCount*czp/((double)muls.cellDiv);
+  divCount = (divCount + 1) % muls.cellDiv;
   
   if (Nzp > 1) {
     timer = getTime();  
-    for (j=0;j<muls->natom;j++) {
-      for (atKind = 0;muls->Znums[atKind]!=atoms[j].Znum;atKind++); // find atKind 
+    for (j=0;j<muls.natom;j++) {
+      for (atKind = 0;muls.Znums[atKind]!=atoms[j].Znum;atKind++); // find atKind 
       for (iz=0;iz<Nzp;iz++) for (pZ = 0;pZ<=perZ;pZ++) {
 	z = fabs((iz+0.5)*dZp-(atoms[j].z-zStart)+pZ*czp);
 	// if (z <= rcutoff[atKind]+dZp) {
 	if (z <= rcutoff[atKind]+dZp) {
 	  for (ix=0;ix<Nxp;ix++)  for (pX = 0;pX<=perX;pX++) {
-	    x =((ix+0.5)*dXp-atoms[j].x+pX*axp)+ muls->potOffsetX;
+	    x =((ix+0.5)*dXp-atoms[j].x+pX*axp)+ muls.potOffsetX;
 	    for (iy=0;iy<Nyp;iy++) for (pY = 0;pY<=perY;pY++)  {
-	      y = ((iy+0.5)*dYp-atoms[j].y+pY*byp) + muls->potOffsetY;
+	      y = ((iy+0.5)*dYp-atoms[j].y+pY*byp) + muls.potOffsetY;
 	      rxy2 = SQR(x)+SQR(y);
 	      r = sqrt(rxy2+SQR(z));
 	      if (r <=rcutoff[atKind]+dZp+dXp)    
-		muls->trans[iz][ix][iy][0] += bicubic(potLUT[atKind],Nzl,Nxl,z/dZ+1.0,sqrt(rxy2)/dX+1.0);
+		muls.trans[iz][ix][iy][0] += bicubic(potLUT[atKind],Nzl,Nxl,z/dZ+1.0,sqrt(rxy2)/dX+1.0);
 	      //potential[iz][iy][ix] += bicubic(potLUT[atKind],Nzl,Nxl,z/dZ+1.0,sqrt(rxy2)/dX+1.0);
 	    }      
 	  }
@@ -291,9 +292,9 @@ void make3DSlicesFT(MULS *muls) {
       
       if (j % 100 == 0) {
 	if ((t=getTime() - timer) >= 10) {
-	  t = t*(double)muls->natom/(double)j;
+	  t = t*(double)muls.natom/(double)j;
 	  timer  += t;
-	  printf("Potential integration: %d%% done, %d min, %d sec left\n",(int)(100.0*(double)(j)/((double)muls->natom)),
+	  printf("Potential integration: %d%% done, %d min, %d sec left\n",(int)(100.0*(double)(j)/((double)muls.natom)),
 	       (int)(t/60.0),(int)((int)(t) % 60));
 	}
       }
@@ -302,14 +303,14 @@ void make3DSlicesFT(MULS *muls) {
   }
     
   // save the potential file:
-  if (muls->savePotential) {
+  if (muls.savePotential) {
 	imageIO = ImageIOPtr(new CImageIO(Nxp, Nyp, dZp, dXp, dYp));
     for (iz=0;iz<Nzp;iz++) {
-      sprintf(fileName,"%s/%s%d.img",muls->folder,muls->fileBase,iz);
+      sprintf(fileName,"%s/%s%d.img",muls.folder,muls.fileBase,iz);
       // printf("Saving potential layer %d to file %s\n",iz,filename); 
-      sprintf(buf,"Projected Potential (%d slices)",muls->slices);
+      sprintf(buf,"Projected Potential (%d slices)",muls.slices);
 	  imageIO->SetComment(std::string(buf));
-	  imageIO->WriteComplexImage((void **)muls->trans[iz], fileName);
+	  imageIO->WriteComplexImage((void **)muls.trans[iz], fileName);
     } 
   } /* end of if savePotential ... */
   
@@ -320,13 +321,14 @@ void make3DSlicesFT(MULS *muls) {
 /*********************************************************************
  * plotVzr(pot,Nx,Nz);
  ********************************************************************/
-void plotVzr(fftw_complex **pot,int Nx,int Nz,double dx,MULS *muls) {
+void plotVzr(fftw_complex **pot,int Nx,int Nz,double dx) //,MULS *muls
+ {
   FILE *fpVzr;
   int ix,iz;
   char str[128];
   double p;
 
-  sprintf(str,"%s/vz.dat",muls->folder);
+  sprintf(str,"%s/vz.dat",muls.folder);
   fpVzr = fopen( str, "w" );
  
   for (ix=Nx/2;ix<Nx;ix++) {
@@ -336,7 +338,7 @@ void plotVzr(fftw_complex **pot,int Nx,int Nz,double dx,MULS *muls) {
   }
 
   fclose( fpVzr );
-  sprintf(str,"xmgr -nxy %s/vz.dat &",muls->folder);
+  sprintf(str,"xmgr -nxy %s/vz.dat &",muls.folder);
   system(str);
 }
 

@@ -5,7 +5,7 @@
 
 struct WaveFixture {
   WaveFixture():
-    wave(WavePtr( new WAVEFUNC(10, 10, 1.0, 1.0)))
+    wave(WavePtr( new WAVEFUNC(10, 10, 1.0, 1.0, 2)))
   { 
     std::cout << "setup wave fixture" << std::endl; 
   }

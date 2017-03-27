@@ -42,7 +42,7 @@ QSTEM - image simulation for TEM/STEM/CBED
 #define AMORPHOUS 1
 #define SPECIAL_GRAIN 2
 
-MULS *muls = new MULS();
+MULS *mulP = new MULS();
 grainBox *grains = NULL;
 int nGrains = 0;
 superCellBox superCell;
@@ -108,12 +108,12 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	muls->nCellX = 1;
-	muls->nCellY = 1;
-	muls->nCellZ = 1;
-	muls->ctiltx = 0;
-	muls->ctilty = 0;
-	muls->ctiltz = 0;
+	mulP->nCellX = 1;
+	mulP->nCellY = 1;
+	mulP->nCellZ = 1;
+	mulP->ctiltx = 0;
+	mulP->ctilty = 0;
+	mulP->ctiltz = 0;
 	superCell.atoms = NULL;
 	superCell.natoms = 0;
 
@@ -192,14 +192,14 @@ int main(int argc, char *argv[]) {
 	str = strchr(outFileName,'.');
 	if (str == NULL) str=outFileName+strlen(outFileName);
 	sprintf(str,".cfg");
-	muls->ax = (float)superCell.ax;
-	muls->by = (float)superCell.by;
-	muls->c	= (float)superCell.cz;
+	mulP->ax = (float)superCell.ax;
+	mulP->by = (float)superCell.by;
+	mulP->c	= (float)superCell.cz;
 
 	superCell.natoms = removeVacancies(superCell.atoms,superCell.natoms);
 
 	printf("will write cfg file to %s\n",outFileName);
-	writeCFG(superCell.atoms, superCell.natoms, outFileName, muls);
+	writeCFG(superCell.atoms, superCell.natoms, outFileName, mulP);
 	printf("wrote cfg file to %s\n",outFileName);
 
 	/**************************************************************
@@ -207,13 +207,13 @@ int main(int argc, char *argv[]) {
 	*/
 	charge = 0.0;
 	if (0) {
-		for (ak=0;ak<muls->atomKinds;ak++) {
+		for (ak=0;ak<mulP->atomKinds;ak++) {
 			count =0;
 			for (j=0;j<superCell.natoms;j++) {
-				if (muls->Znums[ak] == superCell.atoms[j].Znum) count++;
+				if (mulP->Znums[ak] == superCell.atoms[j].Znum) count++;
 			}
-			printf("Z=%3d: %d\n",muls->Znums[ak],count);
-			switch (muls->Znums[ak]) {
+			printf("Z=%3d: %d\n",mulP->Znums[ak],count);
+			switch (mulP->Znums[ak]) {
 			case  7: charge += count*(-3.0); break;
 			case  8: charge += count*(-2.0);  break;
 			case  38: charge += count*(2.0);  break;
@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
 	if (charge > 0) printf(", i.e. %g holes\n",charge);
 	if (charge < 0) printf(", i.e. %g electrons\n",-charge);
 
-	delete(muls);
+	delete(mulP);
 	return 0;
 }
 
@@ -402,15 +402,15 @@ int readParams(char *datFileName) {
 			// sscanf(parStr,"%s %s",grains[gCount].name,unitCellFile);
 			grains[gCount].nplanes = 0;
 			grains[gCount].planes = NULL;
-			muls->nCellX = 1;
-			muls->nCellY = 1;
-			muls->nCellZ = 1;
-			muls->ctiltx = 0;
-			muls->ctilty = 0;
-			muls->ctiltz = 0;
+			mulP->nCellX = 1;
+			mulP->nCellY = 1;
+			mulP->nCellZ = 1;
+			mulP->ctiltx = 0;
+			mulP->ctilty = 0;
+			mulP->ctiltz = 0;
 
-			muls->tds = 0;
-			tempCell = readUnitCell(&(grains[gCount].natoms), unitCellFile, muls, 0);
+			mulP->tds = 0;
+			tempCell = readUnitCell(&(grains[gCount].natoms), unitCellFile, mulP, 0);
 			if (tempCell == NULL) {
 				printf("Error reading unit cell data - exit!\n");
 				exit(0);
@@ -428,12 +428,12 @@ int readParams(char *datFileName) {
 			grains[gCount].unitCell = (atom *)malloc(grains[gCount].natoms*sizeof(atom));
 			memcpy(grains[gCount].unitCell,tempCell,grains[gCount].natoms*sizeof(atom));
 
-			grains[gCount].alpha = muls->cAlpha;
-			grains[gCount].beta  = muls->cBeta;
-			grains[gCount].gamma = muls->cGamma;
-			grains[gCount].ax = muls->ax;
-			grains[gCount].by = muls->by;
-			grains[gCount].cz = muls->c;
+			grains[gCount].alpha = mulP->cAlpha;
+			grains[gCount].beta  = mulP->cBeta;
+			grains[gCount].gamma = mulP->cGamma;
+			grains[gCount].ax = mulP->ax;
+			grains[gCount].by = mulP->by;
+			grains[gCount].cz = mulP->c;
 		}
 		/***************************************************
 		* amorphous stuff
@@ -471,12 +471,12 @@ int readParams(char *datFileName) {
 			// sscanf(parStr,"%s %s",grains[gCount].name,unitCellFile);
 			grains[gCount].nplanes = 0;
 			grains[gCount].planes = NULL;
-			muls->nCellX = 1;
-			muls->nCellY = 1;
-			muls->nCellZ = 1;
-			muls->ctiltx = 0;
-			muls->ctilty = 0;
-			tempCell = readUnitCell(&(grains[gCount].natoms), unitCellFile, muls, 0);
+			mulP->nCellX = 1;
+			mulP->nCellY = 1;
+			mulP->nCellZ = 1;
+			mulP->ctiltx = 0;
+			mulP->ctilty = 0;
+			tempCell = readUnitCell(&(grains[gCount].natoms), unitCellFile, mulP, 0);
 			grains[gCount].unitCell = (atom *)malloc(grains[gCount].natoms * sizeof(atom));
 			memcpy(grains[gCount].unitCell, tempCell, grains[gCount].natoms * sizeof(atom));
 			grains[gCount].alpha = 0;
@@ -581,12 +581,12 @@ int readParams(char *datFileName) {
 
 				// assign number of atoms directly, if specified in input file
 				if (Nkind > 0) grains[gCount].unitCell[grains[gCount].natoms-1].y = (float)Nkind;
-				for (i=0;i<muls->atomKinds;i++) 	
-					if (muls->Znums[i] == grains[gCount].unitCell[grains[gCount].natoms-1].Znum) break;
-				if (i == muls->atomKinds) {
-					muls->atomKinds++;
-					muls->Znums = (int *) realloc(muls->Znums,muls->atomKinds*sizeof(int));
-					muls->Znums[i] = grains[gCount].unitCell[grains[gCount].natoms-1].Znum;
+				for (i=0;i<mulP->atomKinds;i++) 	
+					if (mulP->Znums[i] == grains[gCount].unitCell[grains[gCount].natoms-1].Znum) break;
+				if (i == mulP->atomKinds) {
+					mulP->atomKinds++;
+					mulP->Znums = (int *) realloc(mulP->Znums,mulP->atomKinds*sizeof(int));
+					mulP->Znums[i] = grains[gCount].unitCell[grains[gCount].natoms-1].Znum;
 				}
 			} /* end of if "atom:" */
 		} /* end of if gCount >=0 */
@@ -1238,19 +1238,19 @@ void makeDistrPlot(atom *atoms,int natoms,double ax) {
 	int **list;
 	FILE *pltfp;
 
-	printf("Atom kinds: %d: ",muls->atomKinds);
-	for (i=0;i<muls->atomKinds;i++) printf(" %3d ",muls->Znums[i]);
+	printf("Atom kinds: %d: ",mulP->atomKinds);
+	for (i=0;i<mulP->atomKinds;i++) printf(" %3d ",mulP->Znums[i]);
 	printf("\n");
 
 	count = (int)(ax/DR+1);
-	list = int2D(muls->atomKinds,count,"list");
-	memset(list[0],0,count*muls->atomKinds*sizeof(int));
+	list = int2D(mulP->atomKinds,count,"list");
+	memset(list[0],0,count*mulP->atomKinds*sizeof(int));
 	for (j=0;j<natoms;j++) {
 		ind = (int)(atoms[j].x/DR);
 		if (ind < 0) ind = 0;
 		if (ind >= count) ind = count;
-		for (i=0;i<muls->atomKinds;i++) if (muls->Znums[i] == atoms[j].Znum) break;
-		if (i==muls->atomKinds) {
+		for (i=0;i<mulP->atomKinds;i++) if (mulP->Znums[i] == atoms[j].Znum) break;
+		if (i==mulP->atomKinds) {
 			// printf("Error: wrong Z (%d)\n",atoms[j].Znum);
 		}
 		else list[i][ind]++;
@@ -1258,7 +1258,7 @@ void makeDistrPlot(atom *atoms,int natoms,double ax) {
 	pltfp = fopen("disList.dat","w");
 	for (j=0;j<count;j++) {
 		fprintf( pltfp,"%.3f ",j*DR);
-		for (i=0;i<muls->atomKinds;i++) fprintf( pltfp,"%d ",list[i][j]);
+		for (i=0;i<mulP->atomKinds;i++) fprintf( pltfp,"%d ",list[i][j]);
 		fprintf( pltfp,"\n");
 	}
 	fclose(pltfp);

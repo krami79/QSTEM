@@ -29,9 +29,11 @@ QSTEM - image simulation for TEM/STEM/CBED
 #include <stdio.h>	/* ANSI C libraries */
 #include <stdlib.h>
 #ifdef _WIN32
+/*
 #if _DEBUG
 #include <crtdbg.h>
 #endif
+*/
 #endif
 #include <string.h>
 #ifndef _WIN32
@@ -76,7 +78,7 @@ QSTEM - image simulation for TEM/STEM/CBED
 
 const char *resultPage = "result.html";
 /* global variable: */
-MULS muls;
+//MULS muls; //extern global in datacontainers
 // int fftMeasureFlag = FFTW_MEASURE;
 int fftMeasureFlag = FFTW_ESTIMATE;
 extern char *elTable;
@@ -95,6 +97,7 @@ void doMSCBED();
 void doTOMO();
 void readFile();
 void displayParams();
+char* readMask(char *fname);
 
 void usage() {
 	printf("usage: stem [input file='stem.dat']\n\n");
@@ -108,21 +111,27 @@ void usage() {
 **************************************************************/
 
 
-int main(int argc, char *argv[]) {
-	int i; 
+int main(int argc, char *argv[]) 
+{
 	double timerTot;
 	char fileName[512]; 
 	char cinTemp[BUF_LEN];
-
+	
+	
+	
+	
+	//for (int i=0;i<BUF_LEN;i++)
+	//	cinTemp[i] = 0;
+	memset(cinTemp,0,sizeof(cinTemp)/sizeof(cinTemp[0]));
 	timerTot = cputim();
-	for (i=0;i<BUF_LEN;i++)
-		cinTemp[i] = 0;
 	muls.nCellX = 1; muls.nCellY = 1; muls.nCellZ = 1; 
 
 #ifdef UNIX
 	system("date");
 #endif
-
+#ifdef _OPENMP
+	omp_set_dynamic(0);
+#endif
 	/*************************************************************
 	* read in the parameters
 	************************************************************/  
@@ -139,9 +148,7 @@ int main(int argc, char *argv[]) {
 	readFile();
 
 	displayParams();
-#ifdef _OPENMP
-	omp_set_dynamic(1);
-#endif
+
 	if (muls.mode == STEM) {
 		// sprintf(systStr,"mkdir %s",muls.folder);
 		// system(systStr);
@@ -174,8 +181,8 @@ int main(int argc, char *argv[]) {
 #endif
 
 	// Console.Read(); //  <--- Right here
-	printf( "DEBUG Main: Press any key to exit()" );
-	std::cin.ignore();
+	//printf( "DEBUG Main: Press any key to exit()" );
+	//std::cin.ignore();
 	return 0;
 }
 
@@ -194,6 +201,8 @@ void initMuls() {
 	muls.lpartl = 0;
 
 	muls.atomRadius = 5.0;  /* radius in A for making the potential boxes */
+
+	muls.mask = NULL;
 
 	for (sCount =0;sCount<slices;sCount++)
 		muls.cin2[sCount] = 'a'+sCount;
@@ -236,6 +245,7 @@ void initMuls() {
 	muls.kx2= NULL;
 	muls.ky = NULL;
 	muls.ky2= NULL;
+
 
 	/****************************************************/
 	/* copied from slicecell.c                          */
@@ -344,9 +354,11 @@ void displayParams() {
 		"???"); 
 	printf("* Date: %s, Time: %s\n",Date,Time);
 	printf("*****************************************************\n");
+	printf("* threads:              %d\n",muls.threads);
 	printf("* Print level:          %d\n",muls.printLevel);
 	printf("* Save level:           %d\n",muls.saveLevel);
 	printf("* Input file:           %s\n",muls.atomPosFile);
+	printf("* Mask file:            %s\n",muls.maskfileBase);
 	if (muls.savePotential)
 		printf("* Potential file name:  %s\n",muls.fileBase);
 	/* create the data folder ... */
@@ -490,16 +502,16 @@ void displayParams() {
 			0.5*2.0/3.0*wavelength(muls.v0)/muls.resolutionX*1000);    
 		printf("* Number of detectors:  %d\n",muls.detectorNum);
 		for (i=0;i<muls.detectorNum;i++) {
-			printf("* %d (\"%s\"):",i+1,muls.detectors[0][i]->name);
-			for (j=0;j<14-strlen(muls.detectors[0][i]->name);j++) printf(" ");
+			printf("* %d (\"%s\"):",i+1,muls.detectors[0][i].name);
+			for (j=0;j<14-strlen(muls.detectors[0][i].name);j++) printf(" ");
 			printf(" %g .. %g mrad = (%.2g .. %.2g 1/A)\n",
-				muls.detectors[0][i]->rInside,
-				muls.detectors[0][i]->rOutside,
-				muls.detectors[0][i]->k2Inside,
-				muls.detectors[0][i]->k2Outside);
-			if ((muls.detectors[0][i]->shiftX != 0) ||(muls.detectors[0][i]->shiftY != 0))
+				muls.detectors[0][i].rInside,
+				muls.detectors[0][i].rOutside,
+				muls.detectors[0][i].k2Inside,
+				muls.detectors[0][i].k2Outside);
+			if ((muls.detectors[0][i].shiftX != 0) ||(muls.detectors[0][i].shiftY != 0))
 				printf("*   center shifted:     dkx=%g, dky=%g\n",
-				muls.detectors[0][i]->shiftX,muls.detectors[0][i]->shiftY);
+				muls.detectors[0][i].shiftX,muls.detectors[0][i].shiftY);
 		}
 		printf("* Scan window:          (%g,%g) to (%g,%g)A, %d x %d = %d pixels\n",
 			muls.scanXStart,muls.scanYStart,muls.scanXStop,muls.scanYStop,
@@ -601,6 +613,43 @@ void readSFactLUT() {
 	muls.sfNk = Nk+1;
 }
 
+char* readMask(char *fname)
+{
+	FILE *fp = fopen( fname, "r" );
+	if(fp == 0)
+	{
+		printf("failed to read mask from: %s\n", fname);
+		return NULL;
+	}
+	const int cols = muls.scanXN;
+	const int rows = muls.scanYN;
+	char* mask = new char[cols*rows];
+	int last = '\n';
+	for(int r = 0; (r < rows) && (last!=-1); ++r)
+	{
+		last = '\t';
+		for(int c = 0; (c < cols) && (last != '\n') ; ++c)
+		{
+			mask[r*cols+c] = ((last=fgetc(fp))=='1')?1:0;
+			//printf("%c",last);
+			if(last == EOF)
+			{	return mask;}
+			last = fgetc(fp);//consume the separating blank,tab,newline
+		}
+		//printf("\n");
+		while( (last != '\n') && (last != EOF)) //make sure 
+		{
+			last = fgetc(fp);
+		}
+	}
+	
+	printf("readMask: %dx%d %s\n", cols,rows,fname);
+	
+	
+	return mask;
+}
+
+
 
 /************************************************************************
 * readFile() 
@@ -629,7 +678,8 @@ void readFile() {
 	muls.cubez = 0.0;
 
 	muls.mode = STEM;
-	if (readparam("mode:",buf,1)) {
+	if (readparam("mode:",buf,1)) 
+	{
 		if (strstr(buf,"STEM")) muls.mode = STEM;
 		else if (strstr(buf,"TEM")) muls.mode = TEM;
 		else if (strstr(buf,"CBED")) muls.mode = CBED;
@@ -637,12 +687,26 @@ void readFile() {
 		else if (strstr(buf, "TOMO")) muls.mode = TOMO;
 		else if (strstr(buf, "REFINE")) muls.mode = REFINE;
 	}
-
+#ifdef _OPENMP	
+	muls.threads = 0;
+	if (readparam("threads:",buf,1)) sscanf(buf,"%d",&(muls.threads));
+	if (muls.threads < 0)
+	{
+		omp_set_dynamic(1);
+	}    
+	if (muls.threads == 0) muls.threads = omp_get_max_threads();
+	if (muls.threads > 0)
+	{
+		omp_set_num_threads(muls.threads);
+	}
 	muls.printLevel = 2;
+#else	
+	muls.threads = 1;
+#endif
 	if (readparam("print level:",buf,1)) sscanf(buf,"%d",&(muls.printLevel));
 	muls.saveLevel = 0;
 	if (readparam("save level:",buf,1)) sscanf(buf,"%d",&(muls.saveLevel));
-
+	
 
 	/************************************************************************
 	* Basic microscope/simulation parameters, 
@@ -664,9 +728,28 @@ void readFile() {
 		strPtr = strchr(buf,'"');
 		strcpy(muls.fileBase,strPtr+1);
 		strPtr = strchr(muls.fileBase,'"');
-		*strPtr = '\0';
+		if(strPtr != 0)
+		{	*strPtr = '\0';}
 	}
 
+	if ( readparam( "maskname:", buf, 1 ) )
+	{
+		sscanf(buf,"%s",muls.maskfileBase);
+		if (muls.maskfileBase[0] == '"') 
+		{
+			strPtr = strchr(buf,'"');
+			strcpy(muls.maskfileBase,strPtr+1);
+			strPtr = strchr(muls.maskfileBase,'"');
+			if(strPtr != 0)
+			{	*strPtr = '\0';}
+		}
+	}		
+	else
+	{
+		strcpy(muls.maskfileBase,"<none>");
+	}
+	
+	
 	// RAM: add support to read-in a single wavefunction
 	if ( readparam( "wavename:", buf, 1) )
 	{
@@ -677,7 +760,8 @@ void readFile() {
 		strPtr = strchr( buf, '"' );
 		strcpy( muls.fileWaveIn, strPtr + 1 );
 		strPtr = strchr( muls.fileWaveIn, '"' );
-		*strPtr = '\0';
+		if(strPtr != 0)
+		{	*strPtr = '\0';}
 	}
 
 	if (readparam("NCELLX:",buf,1)) sscanf(buf,"%d",&(muls.nCellX));
@@ -835,7 +919,12 @@ void readFile() {
 	// printf("memory check: %d, ptr= %d\n",_CrtCheckMemory(),(int)malloc(32*sizeof(char)));
 
 	muls.atoms = readUnitCell(&(muls.natom),muls.atomPosFile,&muls,1);
-
+	if(muls.mask != NULL)
+	{
+		delete[] muls.mask;
+		muls.mask = NULL;
+	}
+	
 	// printf("memory check: %d, ptr= %d\n",_CrtCheckMemory(),(int)malloc(32*sizeof(char)));
 
 
@@ -1069,10 +1158,11 @@ void readFile() {
 		if (muls.scanXN < 1) muls.scanXN = 1;
 		if (muls.scanYN < 1) muls.scanYN = 1;
 		// if (muls.scanXStart > muls.scanXStop) muls.scanXN = 1;
-
+		muls.mask = readMask(muls.maskfileBase);	
 		muls.displayProgInterval = muls.scanYN*muls.scanYN;
 		if (readparam("propagation progress interval:",buf,1)) 
-			sscanf(buf,"%d",&(muls.displayProgInterval));
+		{	sscanf(buf,"%d",&(muls.displayProgInterval));}
+		
 	}
 	muls.displayPotCalcInterval = 100000; // RAM: default, but normally read-in by .CFG file in next code fragment
 	if ( readparam( "potential progress interval:", buf, 1 ) )
@@ -1329,12 +1419,13 @@ void readFile() {
 		//       save each of the thicknesses in memory, then save to disk afterwards.
 		for (int islice=0; islice<=tCount; islice++)
 		{
-			std::vector<DetectorPtr> detectors;
+			std::vector<Detector> detectors;
 			resetParamFile();
-			while (readparam("detector:",buf,0)) {
-				DetectorPtr det = DetectorPtr(new Detector(muls.scanXN, muls.scanYN, 
+			while (readparam("detector:",buf,0)) { 
+				detectors.emplace_back(muls.scanXN, muls.scanYN, 
 					(muls.scanXStop-muls.scanXStart)/(float)muls.scanXN,
-					(muls.scanYStop-muls.scanYStart)/(float)muls.scanYN));
+					(muls.scanYStop-muls.scanYStart)/(float)muls.scanYN);
+				DetectorPtr det = &detectors.back();
 				
 				sscanf(buf,"%g %g %s %g %g",&(det->rInside),
 					&(det->rOutside), det->name, &(det->shiftX),&(det->shiftY));  
@@ -1348,7 +1439,7 @@ void readFile() {
 				/* calculate the squares of the ks */
 				det->k2Inside *= det->k2Inside;
 				det->k2Outside *= det->k2Outside;
-				detectors.push_back(det);
+				
 			}
 			muls.detectors.push_back(detectors);
 		}
@@ -1731,7 +1822,7 @@ void doNBED()
 	int oldMulsRepeat1 = 1;
 	int oldMulsRepeat2 = 1;
 	long iseed = 0;
-	WavePtr wave = WavePtr(new WAVEFUNC(muls.nx, muls.ny, muls.resolutionX, muls.resolutionY));
+	WavePtr wave = new WAVEFUNC(muls.nx, muls.ny, muls.resolutionX, muls.resolutionY, muls.detectorNum);
 	ImageIOPtr imageIO = ImageIOPtr(new CImageIO(muls.nx, muls.ny, t, muls.resolutionX, muls.resolutionY));
 	std::vector<double> params(2);
 
@@ -1774,7 +1865,7 @@ void doNBED()
 		*/
 		resetParamFile();
 
-		/* probe(&muls,xpos,ypos); */
+		/* probe(xpos,ypos); */ //&muls,
 		/* make incident probe wave function with probe exactly in the center */
 		/* if the potential array is not big enough, the probe can
 		* then also be adjusted, so that it is off-center
@@ -1788,8 +1879,8 @@ void doNBED()
 
 		// RAM: This is where I need to remove the existing STEM probe and in the future add some circular shift and crop?
 		// RAM: made a new function in stemlib, probeShiftAndCrop(&muls, wave, muls.scanXStart - muls.potOffsetX, muls.scanYStart - muls.potOffsetY)
-		// probe(&muls, wave, muls.scanXStart - muls.potOffsetX, muls.scanYStart - muls.potOffsetY);
-		probeShiftAndCrop(&muls, wave, muls.scanXStart - muls.potOffsetX, muls.scanYStart - muls.potOffsetY, muls.nx, muls.ny);
+		// probe(wave, muls.scanXStart - muls.potOffsetX, muls.scanYStart - muls.potOffsetY); //&muls,
+		probeShiftAndCrop(wave, muls.scanXStart - muls.potOffsetX, muls.scanYStart - muls.potOffsetY, muls.nx, muls.ny);
 		// RAM: function is empty for now (returns wave)
 
 		if (muls.saveLevel > 2) 
@@ -1866,10 +1957,10 @@ void doNBED()
 			************************************************/
 			if (muls.equalDivs) {
 				if (muls.scatFactor == CUSTOM)
-					make3DSlicesFT(&muls);
+					make3DSlicesFT();//&muls
 				else
-					make3DSlices(&muls, muls.slices, muls.atomPosFile, NULL);
-				initSTEMSlices(&muls, muls.slices);
+					make3DSlices( NULL); //,&muls, muls.slices, muls.atomPosFile
+				initSTEMSlices(); //&muls, muls.slices
 			}
 
 			muls.saveFlag = 0;
@@ -1884,15 +1975,15 @@ void doNBED()
 				******************************************************/
 				if (!muls.equalDivs) {
 					if (muls.scatFactor == CUSTOM)
-						make3DSlicesFT(&muls);
+						make3DSlicesFT();//&muls
 					else
-						make3DSlices(&muls, muls.slices, muls.atomPosFile, NULL);
-					initSTEMSlices(&muls, muls.slices);
+						make3DSlices( NULL); //&muls, muls.slices, muls.atomPosFile,
+					initSTEMSlices(); //&muls, muls.slices
 				}
 
 				timer = cputim();
 				// what probe should runMulsSTEM use here?
-				runMulsSTEM(&muls, wave);
+				runMulsSTEM(wave);//&muls,
 
 				printf("Thickness: %gA, int.=%g, time: %gsec\n",
 					wave->thickness, wave->intIntensity, cputim() - timer);
@@ -2056,7 +2147,7 @@ void doCBED() {
 	int oldMulsRepeat1 = 1;
 	int oldMulsRepeat2 = 1;
 	long iseed=0;
-	WavePtr wave = WavePtr(new WAVEFUNC(muls.nx,muls.ny, muls.resolutionX, muls.resolutionY));
+	WavePtr wave = WavePtr(new WAVEFUNC(muls.nx,muls.ny, muls.resolutionX, muls.resolutionY, muls.detectorNum));
 	ImageIOPtr imageIO = ImageIOPtr(new CImageIO(muls.nx, muls.ny, t, muls.resolutionX, muls.resolutionY));
 	std::vector<double> params(2);
 
@@ -2087,7 +2178,7 @@ void doCBED() {
 		*/
 		resetParamFile();
 
-		/* probe(&muls,xpos,ypos); */
+		/* probe(xpos,ypos); */ //&muls,
 		/* make incident probe wave function with probe exactly in the center */
 		/* if the potential array is not big enough, the probe can 
 		* then also be adjusted, so that it is off-center
@@ -2097,7 +2188,9 @@ void doCBED() {
 		probeOffsetY = muls.sourceRadius*gasdev(&iseed)*SQRT_2;
 		muls.scanXStart = probeCenterX+probeOffsetX;
 		muls.scanYStart = probeCenterY+probeOffsetY;
-		probe(&muls, wave,muls.scanXStart-muls.potOffsetX,muls.scanYStart-muls.potOffsetY);
+		probe(wave,muls.scanXStart-muls.potOffsetX,muls.scanYStart-muls.potOffsetY);//&muls, 
+		
+		
 		if (muls.saveLevel > 2) {
 			sprintf(systStr,"%s/wave_probe.img",muls.folder);
 			wave->WriteWave(systStr);
@@ -2170,15 +2263,15 @@ void doCBED() {
 
 
 			/************************************************
-			*make3DSlicesFFT(&muls,muls.slices,atomPosFile,NULL);
+			*make3DSlicesFFT(NULL); //&muls,muls.slices,atomPosFile,
 			*exit(0);
 			************************************************/
 			if (muls.equalDivs) {
 				if (muls.scatFactor == CUSTOM)
-					make3DSlicesFT(&muls);
+					make3DSlicesFT(); //&muls
 				else
-					make3DSlices(&muls,muls.slices,muls.atomPosFile,NULL);
-				initSTEMSlices(&muls,muls.slices);
+					make3DSlices(NULL); //&muls,muls.slices,muls.atomPosFile,
+				initSTEMSlices();//&muls,muls.slices
 			}
 
 			muls.saveFlag = 0;
@@ -2193,15 +2286,15 @@ void doCBED() {
 				******************************************************/
 				if (!muls.equalDivs) {
 					if (muls.scatFactor == CUSTOM)
-						make3DSlicesFT(&muls);
+						make3DSlicesFT(); //&muls
 					else
-						make3DSlices(&muls,muls.slices,muls.atomPosFile,NULL);
-					initSTEMSlices(&muls,muls.slices);
+						make3DSlices(NULL);//&muls,muls.slices,muls.atomPosFile,
+					initSTEMSlices();//&muls,muls.slices
 				}
 
 				timer = cputim();
 				// what probe should runMulsSTEM use here?
-				runMulsSTEM(&muls,wave); 
+				runMulsSTEM(wave); //&muls,
 
 				printf("Thickness: %gA, int.=%g, time: %gsec\n",
 					wave->thickness,wave->intIntensity,cputim()-timer);
@@ -2365,7 +2458,7 @@ void doTEM() {
 	int oldMulsRepeat2 = 1;
 	long iseed=0;
 	std::vector<double> params;
-	WavePtr wave = WavePtr(new WAVEFUNC(muls.nx,muls.ny,muls.resolutionX,muls.resolutionY));
+	WavePtr wave = WavePtr(new WAVEFUNC(muls.nx,muls.ny,muls.resolutionX,muls.resolutionY, muls.detectorNum));
 	fftwf_complex **imageWave = NULL;
 
 	if (iseed == 0) iseed = -(long) time( NULL );
@@ -2396,7 +2489,7 @@ void doTEM() {
 
 		// muls.scanXStart = muls.nx/2*muls.resolutionX+muls.sourceRadius*gasdev(&iseed)*sqrt(2);
 		// muls.scanYStart = muls.ny/2*muls.resolutionY+muls.sourceRadius*gasdev(&iseed)*sqrt(2);
-		// probe(&muls,muls.scanXStart,muls.scanYStart);
+		// probe(muls.scanXStart,muls.scanYStart);//&muls,
 
 		//muls.nslic0 = 0;
 		// produce an incident plane wave:
@@ -2462,8 +2555,8 @@ void doTEM() {
 			************************************************/
 			if (muls.equalDivs) {
 				if (muls.printLevel > 1) printf("found equal unit cell divisions\n");
-				make3DSlices(&muls,muls.slices,muls.atomPosFile,NULL);
-				initSTEMSlices(&muls,muls.slices);
+				make3DSlices(NULL);//&muls,muls.slices,muls.atomPosFile,
+				initSTEMSlices();//&muls,muls.slices
 			}
 
 			muls.saveFlag = 0;
@@ -2477,12 +2570,12 @@ void doTEM() {
 				******************************************************/
 				// if ((muls.tds) || (muls.nCellZ % muls.cellDiv != 0)) {
 				if (!muls.equalDivs) {
-					make3DSlices(&muls,muls.slices,muls.atomPosFile,NULL);
-					initSTEMSlices(&muls,muls.slices);
+					make3DSlices(NULL);//&muls,muls.slices,muls.atomPosFile,
+					initSTEMSlices();//&muls,muls.slices
 				}
 
 				timer = cputim();
-				runMulsSTEM(&muls,wave); 
+				runMulsSTEM(wave);//&muls, 
 				muls.totalSliceCount += muls.slices;
 
 				if (muls.printLevel > 0) {
@@ -2720,26 +2813,91 @@ void doTEM() {
 ***********************************************************************/
 
 void doSTEM() {
-	int ix=0,iy=0,i,pCount,picts,ixa,iya,totalRuns;
+	bool pilot_HACK = true;
+	int picts,totalRuns;
 	double timer, total_time=0;
 	char buf[BUF_LEN];
-	real t;
 	static real **avgArray=NULL;
 	double collectedIntensity;
 
-	std::vector<WavePtr> waves;
-	WavePtr wave;
-
+	std::vector<WAVEFUNC> waves;
+	
+	const int area = muls.scanXN * muls.scanYN;
+	const bool has_mask = muls.mask != NULL;
+	int numpix = 0; 
+	if(has_mask)
+	{
+		for( int i = 0; i < area; ++i)
+		{
+			if(muls.mask[i]==1) ++numpix;
+		}	
+	}
+	else
+	{
+		numpix = area;
+	}
+	int *pixels = new int[numpix];
+	if(has_mask)
+	{
+		int j = -1;
+		for( int i = 0; i < area; ++i)
+		{
+			if(muls.mask[i]==1)
+			{
+				pixels[++j] = i;
+			}
+		}
+	}
+	else
+	{
+		for( int i = 0; i < area; ++i) {pixels[i] = i;}
+	}
+	
 	//pre-allocate several waves (enough for one row of the scan.  
 	for (int th=0; th<omp_get_max_threads(); th++)
 	{
-		waves.push_back(WavePtr(new WAVEFUNC(muls.nx, muls.ny, muls.resolutionX, muls.resolutionY)));
+		waves.emplace_back(muls.nx, muls.ny, muls.resolutionX, muls.resolutionY, muls.detectorNum);
 	}
 
 	muls.chisq = std::vector<double>(muls.avgRuns);
 	totalRuns = muls.avgRuns;
+	
+	if(pilot_HACK)
+	{   //really bad Hack to always do the first pixel single threaded
+		///but totally works, no more strange segfaults 		
+		//printf("warm up ... ");
+		fflush(stdout);
+		make3DSlices(NULL); 
+		initSTEMSlices();
+		const int j = pixels[0];
+		const int ix = j / muls.scanYN;
+		const int iy = j % muls.scanYN;		
+		WavePtr wave = &waves[0];
+		probe(wave, muls.nx/2*muls.resolutionX, muls.ny/2*muls.resolutionY);//&muls,
+		wave->iPosX =(int)(ix*(muls.scanXStop-muls.scanXStart)/
+						  ((float)muls.scanXN*muls.resolutionX));
+		wave->iPosY = (int)(iy*(muls.scanYStop-muls.scanYStart)/
+						   ((float)muls.scanYN*muls.resolutionY));
+		if (wave->iPosX > muls.potNx-muls.nx)
+		{
+			wave->iPosX = muls.potNx-muls.nx;  
+		}
+		if (wave->iPosY > muls.potNy-muls.ny)
+		{
+			wave->iPosY = muls.potNy-muls.ny;
+		}			
+		wave->detPosX=ix;
+		wave->detPosY=iy;
+		runMulsSTEM(wave); 
+		wave->intIntensity=0;
+		//printf(" done\n");				
+	}
+	
+	
+	
+	
+	
 	timer = cputim();
-
 	/* average over several runs of for TDS */
 	displayProgress(-1);
 
@@ -2753,7 +2911,7 @@ void doSTEM() {
 		/****************************************
 		* do the (big) loop
 		*****************************************/
-		pCount = 0;
+		//pCount = 0;
 		/* make sure we start at the beginning of the file 
 		so we won't miss any line that contains a sequence,
 		because we will not do any EOF wrapping
@@ -2779,7 +2937,10 @@ void doSTEM() {
 			* cellDiv will usually be 1 in that case.
 			*/
 			sscanf(buf,"%d %d",&muls.mulsRepeat1,&picts);
-			for (i=0;i<(int)strlen(buf);i++) buf[i] = 0;
+			
+			//for (int i=0;i<(int)strlen(buf);i++) {buf[i] = 0;}
+			memset(buf,0,sizeof(buf)*sizeof(buf[0])); 
+			
 			if (picts < 1) picts = 1;
 			muls.mulsRepeat2 = picts;
 			sprintf(muls.cin2,"%d",muls.mulsRepeat1);
@@ -2793,21 +2954,30 @@ void doSTEM() {
 			picts *= muls.cellDiv;
 
 			if (muls.equalDivs) {
-				make3DSlices(&muls, muls.slices, muls.atomPosFile, NULL);
-				initSTEMSlices(&muls, muls.slices);
+				if(!pilot_HACK)
+				{
+					make3DSlices(NULL); //&muls, muls.slices, muls.atomPosFile,
+					initSTEMSlices(); //&muls, muls.slices
+				}
+				pilot_HACK = false;
 				timer = cputim();
 			}
 
 			/****************************************
 			* do the (small) loop over slabs
 			*****************************************/
-			for (pCount=0;pCount<picts;pCount++) {
+			for (int pCount=0;pCount<picts;++pCount) {
 				/*******************************************************
 				* build the potential slices from atomic configuration
 				******************************************************/
 				if (!muls.equalDivs) {
-					make3DSlices(&muls,muls.slices,muls.atomPosFile,NULL);
-					initSTEMSlices(&muls,muls.slices);
+					
+					if(!pilot_HACK)
+					{
+						make3DSlices(NULL); //&muls, muls.slices, muls.atomPosFile,
+						initSTEMSlices(); //&muls, muls.slices
+					}
+					pilot_HACK = false;
 					timer = cputim();
 				}
 
@@ -2817,26 +2987,28 @@ void doSTEM() {
 				*************************************************/
 				// default(none) forces us to specify all of the variables that are used in the parallel section.  
 				//    Otherwise, they are implicitly shared (and this was cause of several bugs.)
+				int threadnum=0;
 #pragma omp parallel \
-	private(ix, iy, ixa, iya, wave, t, timer) \
-	shared(pCount, picts, muls, collectedIntensity, total_time, waves) \
+	shared(pCount, picts, muls, collectedIntensity, waves, stdout, pixels, numpix, timer, total_time) \
 	default(none)
-#pragma omp for
-				for (i=0; i < (muls.scanXN * muls.scanYN); i++)
+#pragma omp for	//schedule(static) no actual effect			
+				for (int i=0; i < numpix; i++)
 				{
-					timer=cputim();
-					ix = i / muls.scanYN;
-					iy = i % muls.scanYN;
-
-					wave = waves[omp_get_thread_num()];
+					const int j = pixels[i];
+					const int ix = j / muls.scanYN;
+					const int iy = j % muls.scanYN;
+					const int threadnum = omp_get_thread_num();
+					if(threadnum==0)	timer=cputim();
+					
+					WavePtr wave = &waves[threadnum];
 							
 					//printf("Scanning: %d %d %d %d\n",ix,iy,pCount,muls.nx);
 
 					/* if this is run=0, create the inc. probe wave function */
 					if (pCount == 0) 
 					{
-						probe(&muls, wave, muls.nx/2*muls.resolutionX, muls.ny/2*muls.resolutionY);
-
+						probe(wave, muls.nx/2*muls.resolutionX, muls.ny/2*muls.resolutionY);//&muls,
+						
 						// TODO: modifying shared value from multiple threads?
 						//muls.nslic0 = 0;
 						//wave->thickness = 0.0;
@@ -2874,7 +3046,7 @@ void doSTEM() {
 					wave->detPosX=ix;
 					wave->detPosY=iy;
 
-					runMulsSTEM(&muls,wave); 
+					runMulsSTEM(wave); //&muls,
 
 
 					/***************************************************************
@@ -2884,8 +3056,8 @@ void doSTEM() {
 					* if collectIntensity() has been executed correctly.
 					***************************************************************/
 
-					#pragma omp atomic
-					collectedIntensity += wave->intIntensity;
+					//#pragma omp atomic
+					wave->collectedIntensity += wave->intIntensity;
 
 					if (pCount == picts-1)  /* if this is the last slice ... */
 					{
@@ -2897,9 +3069,9 @@ void doSTEM() {
 							if (muls.avgCount == 0)  
 							{
 								// initialize the avgArray from the diffpat
-								for (ixa=0;ixa<muls.nx;ixa++) 
+								for (int ixa=0;ixa<muls.nx;ixa++) 
 								{
-									for (iya=0;iya<muls.ny;iya++)
+									for (int iya=0;iya<muls.ny;iya++)
 									{
 										wave->avgArray[ixa][iya]=wave->diffpat[ixa][iya];
 									}
@@ -2909,13 +3081,13 @@ void doSTEM() {
 							{
 								// printf("Will read image %d %d\n",muls.nx, muls.ny);	
 								wave->ReadAvgArray(wave->avgName);
-								for (ixa=0;ixa<muls.nx;ixa++) for (iya=0;iya<muls.ny;iya++) {
-									t = ((real)muls.avgCount * wave->avgArray[ixa][iya] +
+								for (int ixa=0;ixa<muls.nx;ixa++) for (int iya=0;iya<muls.ny;iya++) {
+									real const t = ((real)muls.avgCount * wave->avgArray[ixa][iya] +
 										wave->diffpat[ixa][iya]) / ((real)(muls.avgCount + 1));
 									if (muls.avgCount>1)
 									{
-										#pragma omp atomic
-										muls.chisq[muls.avgCount-1] += (wave->avgArray[ixa][iya]-t)*
+										//#pragma omp atomic
+										wave->chisq[muls.avgCount-1] += (wave->avgArray[ixa][iya]-t)*
 											(wave->avgArray[ixa][iya]-t);
 									}
 									wave->avgArray[ixa][iya] = t;
@@ -2923,40 +3095,52 @@ void doSTEM() {
 							}
 							// Write the array to a file, resize and crop it, 
 							wave->WriteAvgArray(wave->avgName);
-							}	
-							else {
-								if (muls.avgCount > 0)	muls.chisq[muls.avgCount-1] = 0.0;
-							}
+						}	
+						else if (muls.avgCount > 0)	wave->chisq[0] = 0.0;
+							
 					} /* end of if pCount == picts, i.e. conditional code, if this
 						  * was the last slice
 						  */
 
-					#pragma omp atomic
-					++muls.complete_pixels;
+					//#pragma omp atomic
+					++(wave->completed_pixels);
 
-					if (muls.displayProgInterval > 0) if ((muls.complete_pixels) % muls.displayProgInterval == 0) 
+					if (muls.displayProgInterval > 0 && (threadnum==0) && (wave->completed_pixels) % muls.displayProgInterval == 0) 
 					{
-						#pragma omp atomic
+						
+						//#pragma omp atomic
 						total_time += cputim()-timer;
-						printf("Pixels complete: (%d/%d), int.=%.3f, avg time per pixel: %.2fsec\n",
-							muls.complete_pixels, muls.scanXN*muls.scanYN, wave->intIntensity,
-							(total_time)/muls.complete_pixels);
+						const int estimate = wave->completed_pixels*omp_get_num_threads();
+						printf("Pixels complete: (~%d/%d), int.=%.3f, msec/pix: %.2f\r",
+							estimate, numpix, wave->intIntensity,
+							(1000*total_time)/estimate);
+						fflush(stdout);	
 						timer=cputim();
 					}
 				} /* end of looping through STEM image pixels */
+				printf("\n");
 				/* save STEM images in img files */
-				saveSTEMImages(&muls);
+				for (int th=0; th<waves.size(); th++)
+				{	collectedIntensity += waves[th].intIntensity;}
+				
+				if(muls.avgCount >1)
+				{
+					for (int th=0; th<waves.size(); th++)
+					{	muls.chisq[muls.avgCount-1] += waves[th].chisq[muls.avgCount-1];}
+				}else muls.chisq[0] = 0.0;
+
+				saveSTEMImages();//&muls
 				muls.totalSliceCount += muls.slices;
 			} /* end of loop through thickness (pCount) */
 		} /* end of  while (readparam("sequence: ",buf,0)) */
-		// printf("Total CPU time = %f sec.\n", cputim()-timerTot ); 
-
+		printf("Time per thread: %f sec.\n", total_time ); 
+		
 		/*************************************************************/
 		if (muls.avgCount>1)
 			muls.chisq[muls.avgCount-1] = muls.chisq[muls.avgCount-1]/(double)(muls.nx*muls.ny);
 		muls.intIntensity = collectedIntensity/(muls.scanXN*muls.scanYN);
 		displayProgress(1);
 	} /* end of loop over muls.avgCount */
-
+	delete[] pixels;
 }
 

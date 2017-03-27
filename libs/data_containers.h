@@ -41,20 +41,27 @@ public:
 	char avgName[512];
 	float_tt thickness;
 	float_tt intIntensity;
+	float_tt collectedIntensity;
+	std::vector<float_tt> scatteredInts;
+	std::vector<double> chisq;
+	int completed_pixels;
+	
 	// These are not used for anything aside from when saving files.
 	float_tt resolutionX, resolutionY;
 
 #if FLOAT_PRECISION == 1
 	fftwf_plan fftPlanWaveForw,fftPlanWaveInv;
 	fftwf_complex  **wave; /* complex wave function */
+	static fftwf_complex  **wave0;
 #else
 	fftw_plan fftPlanWaveForw,fftPlanWaveInv;
 	fftw_complex  **wave; /* complex wave function */
+	static fftw_complex  **wave0;
 #endif
 
 public:
 	// initializing constructor:
-	WAVEFUNC(int nx, int ny, float_tt resX, float_tt resY);
+	WAVEFUNC(int nx, int ny, float_tt resX, float_tt resY, int detectorNum);
 	// define a copy constructor to create new arrays
 	//WAVEFUNC( WAVEFUNC& other );
 
@@ -68,9 +75,19 @@ public:
 	void ReadWave(const char *fileName);
 	void ReadDiffPat(const char *fileName);
 	void ReadAvgArray(const char *fileName);
+	void relinkDetectors();	
 };
+void createincWave();
+extern bool has_wave0;
+#if FLOAT_PRECISION == 1	
+extern fftwf_complex  **wave0;
+#else
+extern fftw_complex  **wave0;
+#endif
 
-typedef boost::shared_ptr<WAVEFUNC> WavePtr;
+
+//typedef boost::shared_ptr<WAVEFUNC> WavePtr;
+typedef WAVEFUNC* WavePtr;
 
 
 
@@ -96,14 +113,16 @@ public:
 	float_tt shiftX,shiftY;
 };
 
-typedef boost::shared_ptr<Detector> DetectorPtr;
+//typedef boost::shared_ptr<Detector> DetectorPtr;
+typedef Detector* DetectorPtr;
 
 
 
 class MULS {
 public:
-  int mode;                             /* determine the mode that this program runs in
-					 * can be STEM, TEM, CBED ... */
+  int mode;
+  int threads;                             /* determine the mode that this program runs in
+											* can be STEM, TEM, CBED ... */
   int printLevel;                       /* Flag indicating how much output should appear
 					 * in the window. */
   int saveLevel;
@@ -128,6 +147,8 @@ public:
   
   char cin2[1024];				/* stacking sequence */
   char fileBase[512];
+  char maskfileBase[512];
+  char *mask; 
   char **filein;			/* array of input potential files */
 
   char fileWaveIn[512];  // RAM: input .IMG file for entry wavefunction
@@ -291,7 +312,7 @@ public:
   int detectorNum;
   /* we will alow as many detector 
 			   definitions as the user wants */
-  std::vector<std::vector<DetectorPtr> > detectors;
+  std::vector<std::vector<Detector> > detectors;
   //DETECTOR *detectors;
   int save_output_flag;
   
@@ -306,5 +327,7 @@ public:
                      // make full use of atoms present, creates vacuum edge around sample.
 
 }; 
+
+extern MULS muls;
 
 #endif

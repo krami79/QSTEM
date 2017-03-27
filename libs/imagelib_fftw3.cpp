@@ -85,7 +85,7 @@ void CImageIO::WriteData(void **pix, const char *fileName)
 
 	// TODO: should we write each element individually for clarity?
 	// write the 56-byte header
-	printf( "DEBUG: CImageIO::WriteData: filename is %s \n", fileName );
+	//printf( "DEBUG: CImageIO::WriteData: filename is %s \n", fileName );
 	file.write(reinterpret_cast<const char*>(this), m_headerSize);
 	/*
 	fwrite((void *)&m_headerSize, 4, 1, fp);
@@ -186,7 +186,7 @@ void CImageIO::ReadImage(void **pix, int nx, int ny, const char *fileName)
 	  // RAM: added if/else to fix complex image incomplete read bug
 	  if ( m_complexFlag == 0 )
 	  {
-		  printf( "DEBUG ReadImage parsing real data\n" );
+		  //printf( "DEBUG ReadImage parsing real data\n" );
 		  nRead = fread( pix[0], sizeof(m_dataSize), (size_t)(nx*ny), fpImage );
 		  if ( nRead != nx*ny )
 		  {
@@ -202,7 +202,7 @@ void CImageIO::ReadImage(void **pix, int nx, int ny, const char *fileName)
 	  }
 	  else
 	  { // RAM: complex data
-		  printf( "DEBUG ReadImage parsing complex data\n" );
+		  //printf( "DEBUG ReadImage parsing complex data\n" );
 		  nRead = fread( pix[0], sizeof(m_dataSize), (size_t)(nx*ny*2), fpImage );
 		  if ( nRead != nx*ny*2 )
 		  {

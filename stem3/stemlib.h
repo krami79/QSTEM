@@ -32,25 +32,25 @@ QSTEM - image simulation for TEM/STEM/CBED
  * with parameters given in muls
  *********************************************/
 // int probe(MULS *muls,double dx, double dy);
-void probeShiftAndCrop(MULS *muls, WavePtr wave, double dx, double dy, double cnx, double cny);
-void probe(MULS *muls, WavePtr wave, double dx, double dy);
+void probeShiftAndCrop(WavePtr wave, double dx, double dy, double cnx, double cny); //MULS *muls, 
+void probe(WavePtr wave, double dx, double dy); //MULS *muls,
 void probePlot(MULS *muls, WavePtr wave);
 
-void initSTEMSlices(MULS *muls, int nlayer);
-void interimWave(MULS *muls,WavePtr wave,int slice);
-void collectIntensity(MULS *muls, WavePtr wave, int slices);
+void initSTEMSlices(void);//MULS *muls, int nlayer
+void interimWave(WavePtr wave,int slice); //MULS *muls,
+void collectIntensity(WavePtr wave, int slices); //MULS *muls,
 //void detectorCollect(MULS *muls, WavePtr wave);
-void saveSTEMImages(MULS *muls);
+void saveSTEMImages();//MULS *muls
 
-void make3DSlices(MULS *muls,int nlayer,char *fileName,atom *center);
+void make3DSlices(atom *center);//MULS *muls,int nlayer,char *fileName,
 void make3DSlicesFFT(MULS *muls,int nlayer,char *fileName,atom *center);
 void createAtomBox(MULS *muls, int Znum, atomBox *aBox);
-void transmit(void **wave,void **trans,int nx, int ny,int posx,int posy);
-void propagate_slow(void** wave,int nx, int ny,MULS *muls);
-fftwf_complex *getAtomPotential3D_3DFFT(int Znum, MULS *muls,double B);
-fftwf_complex *getAtomPotential3D(int Znum, MULS *muls,double B,int *nzSub,int *Nr,int*Nz_lut);
-fftwf_complex *getAtomPotentialOffset3D(int Znum, MULS *muls,double B,int *nzSub,int *Nr,int*Nz_lut,float q);
-fftwf_complex *getAtomPotential2D(int Znum, MULS *muls,double B);
+void transmit(void **wave,void **trans,int posx,int posy); //int nx, int ny
+void propagate_slow(void** wave);//,int nx, int ny,MULS *muls
+fftwf_complex *getAtomPotential3D_3DFFT(int Znum, double B); //,MULS *muls
+fftwf_complex *getAtomPotential3D(int Znum,double B,int *nzSub,int *Nr,int*Nz_lut); //, MULS *muls
+fftwf_complex *getAtomPotentialOffset3D(int Znum, double B,int *nzSub,int *Nr,int*Nz_lut,float q); //, MULS *muls,
+fftwf_complex *getAtomPotential2D(int Znum, double B); // ,MULS *muls
 
 WAVEFUNC initWave(int nx, int ny);
 void readStartWave(WavePtr wave);
@@ -61,14 +61,14 @@ void readStartWave(WavePtr wave);
  * the will be updated at return
  *****************************************************************/
 int runMulsSTEM_old(MULS *muls,int lstart);
-int runMulsSTEM(MULS *muls, WavePtr wave);
+int runMulsSTEM(WavePtr wave); //MULS *muls,
 void writePix(char *outFile,fftw_complex **pict,MULS *muls,int iz);
 void fft_normalize(void **array,int nx, int ny);
 void showPotential(fftw_complex ***pot,int nz,int nx,int ny,
 		   double dx,double dy,double dz);
-void atomBoxLookUp(fftw_complex *vlu,MULS *muls,int Znum,double x,double y,
-			   double z,double B);
-void writeBeams(MULS *muls, WavePtr wave,int ilayer, int absolute_slice);
+void atomBoxLookUp(fftw_complex *vlu,int Znum,double x,double y,
+			   double z,double B); //MULS *muls,
+void writeBeams( WavePtr wave,int ilayer, int absolute_slice);//MULS *muls,
 
 /***********************************************************************************
  * old image read/write functions, may soon be outdated
