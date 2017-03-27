@@ -14,7 +14,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
-#SET(CMAKE_EXE_LINKER_FLAGS "-static -s")					
+#this breaks build tests but but stem3 can run on minimal system
+#set(CMAKE_EXE_LINKER_FLAGS "-static -s")
+set(CMAKE_CXX_FLAGS "-std=c++0x")					
 find_package(fftw3 REQUIRED)
 
 find_package(Boost 1.35.0 REQUIRED)
